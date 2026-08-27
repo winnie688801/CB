@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全市場 CB 資金監控與暴雷預警系統 - 財報專家版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+        }
+
+        .bg-dark-card {
+            background-color: #1f2937;
+        }
+
+        .tcri-badge {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            margin-left: 6px;
+        }
+
+        .tcri-safe {
+            background: #065f46;
+            color: #34d399;
+        }
+
+        /* 1-4 */
+        .tcri-warn {
+            background: #78350f;
+            color: #fbbf24;
+        }
+
+        /* 5-6 */
+        .tcri-danger {
+            background: #7f1d1d;
+            color: #f87171;
+        }
+
+        /* 7-9 */
+        .tcri-unknown {
+            background: #374151;
+            color: #9ca3af;
+        }
+
+        /* 篩選按鈕樣式 */
+        .filter-btn.active {
+            background-color: #2563eb;
+            color: #ffffff;
+            border-color: #3b82f6;
+        }
+
+        /* 凍結窗格陰影 */
+        .sticky-header {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 選取列的樣式 */
+        .row-selected {
+            background-color: rgba(59, 130, 246, 0.15) !important;
+            border-left: 4px solid #3b82f6 !important;
+        }
+
+        .row-default {
+            border-left: 4px solid transparent;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-gray-100 antialiased">
+
+    <!-- 頂部導覽列 -->
+    <nav class="bg-gray-800 border-b border-gray-700 p-4 sticky top-0 z-50 shadow-xl">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-tower-observation text-red-500 text-3xl"></i>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight">全市場可轉債 (CB) 發行公司暴雷預警系統</h1>
+                    <p class="text-xs text-gray-400">數據來源：TEJ 財務資料庫 & 公開資訊觀測站 | 演算法：多因子流動性壓力測試</p>
+                </div>
+            </div>
+            <div class="text-right">
+                <div class="text-xs text-green-400 font-mono">系統狀態：即時監控中</div>
+                <div id="target-count-nav" class="text-xs text-gray-400 mt-1">標的數：計算中...</div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-6">
+
+        <!-- 核心預警看板 (含 Hover 下拉清單) -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div
+                class="bg-dark-card p-5 rounded-xl border border-gray-700 shadow-sm flex flex-col justify-center relative group cursor-pointer hover:bg-gray-800 transition">
+                <p class="text-gray-400 text-sm">全體監控標的</p>
+                <h3 class="text-3xl font-bold mt-1" id="all-count">0 <span
+                        class="text-sm font-normal text-gray-500">家</span></h3>
+                <div
+                    class="absolute top-full left-0 mt-2 w-48 bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-3 hidden group-hover:block z-50 max-h-60 overflow-y-auto">
+                    <p class="text-xs text-gray-400 border-b border-gray-600 pb-1 mb-2">所有監控名單</p>
+                    <ul id="list-all" class="text-sm text-gray-300 space-y-1"></ul>
+                </div>
+            </div>
+
+            <div
+                class="bg-dark-card p-5 rounded-xl border border-red-900 shadow-sm flex flex-col justify-center relative group cursor-pointer hover:bg-gray-800 transition overflow-visible">
+                <div class="absolute right-0 top-0 opacity-10 text-6xl"><i class="fa-solid fa-skull"></i></div>
+                <p class="text-gray-400 text-sm">高違約風險 (指數>=60)</p>
+                <h3 class="text-3xl font-bold text-red-500 mt-1" id="high-risk-count">0 <span
+                        class="text-sm font-normal text-gray-500">家</span></h3>
+                <div
+                    class="absolute top-full left-0 mt-2 w-48 bg-gray-800 border border-red-800 rounded-lg shadow-xl p-3 hidden group-hover:block z-50 max-h-60 overflow-y-auto">
+                    <p class="text-xs text-red-400 border-b border-gray-600 pb-1 mb-2">高危險群名單</p>
+                    <ul id="list-risk" class="text-sm text-gray-300 space-y-1"></ul>
+                </div>
+            </div>
+
+            <div
+                class="bg-dark-card p-5 rounded-xl border border-yellow-900 shadow-sm flex flex-col justify-center relative group cursor-pointer hover:bg-gray-800 transition">
+                <p class="text-gray-400 text-sm">資金掏空/異常疑慮</p>
+                <h3 class="text-3xl font-bold text-yellow-500 mt-1" id="anomaly-count">0 <span
+                        class="text-sm font-normal text-gray-500">家</span></h3>
+                <div
+                    class="absolute top-full left-0 mt-2 w-56 bg-gray-800 border border-yellow-800 rounded-lg shadow-xl p-3 hidden group-hover:block z-50 max-h-60 overflow-y-auto">
+                    <p class="text-xs text-yellow-400 border-b border-gray-600 pb-1 mb-2">其他應收佔現金>20%</p>
+                    <ul id="list-anomaly" class="text-sm text-gray-300 space-y-1"></ul>
+                </div>
+            </div>
+
+            <div
+                class="bg-dark-card p-5 rounded-xl border border-blue-900 shadow-sm flex flex-col justify-center relative group cursor-pointer hover:bg-gray-800 transition">
+                <p class="text-gray-400 text-sm">營運失血 (自由現金流為負)</p>
+                <h3 class="text-3xl font-bold text-blue-400 mt-1" id="fcf-neg-count">0 <span
+                        class="text-sm font-normal text-gray-500">家</span></h3>
+                <div
+                    class="absolute top-full right-0 mt-2 w-48 bg-gray-800 border border-blue-800 rounded-lg shadow-xl p-3 hidden group-hover:block z-50 max-h-60 overflow-y-auto">
+                    <p class="text-xs text-blue-400 border-b border-gray-600 pb-1 mb-2">FCF < 0 名單</p>
+                            <ul id="list-fcf" class="text-sm text-gray-300 space-y-1"></ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- 主要數據透視表 -->
+        <div class="bg-dark-card rounded-2xl border border-gray-700 shadow-2xl">
+            <div
+                class="p-6 border-b border-gray-700 flex justify-between items-center bg-gray-800/50 flex-wrap gap-4 rounded-t-2xl">
+                <div>
+                    <h2 class="text-lg font-bold"><i class="fa-solid fa-filter mr-2 text-blue-400"></i>動態篩選過濾器
+                        (點擊表格列可查看單一公司診斷)</h2>
+                </div>
+
+                <div class="flex items-center space-x-3 flex-wrap gap-y-2">
+                    <div class="relative">
+                        <i
+                            class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs"></i>
+                        <input type="text" id="search-input" placeholder="搜尋代號或名稱..."
+                            class="bg-gray-700 text-gray-200 text-xs pl-8 pr-8 py-1.5 rounded border border-gray-600 focus:outline-none focus:border-blue-500 w-44 transition-all"
+                            oninput="handleSearch(this.value)">
+                        <button id="clear-search-btn"
+                            class="absolute right-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-200 text-xs hidden"
+                            onclick="clearSearch()">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+
+                    <div class="flex space-x-2 flex-wrap gap-y-2">
+                        <button
+                            class="filter-btn active text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1.5 rounded border border-gray-600"
+                            data-filter="all">顯示全部</button>
+                        <button
+                            class="filter-btn text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1.5 rounded border border-red-800"
+                            data-filter="cash-short">現金無法覆蓋短債</button>
+                        <button
+                            class="filter-btn text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1.5 rounded border border-yellow-800"
+                            data-filter="int-danger">利保倍數 < 1</button>
+                                <button
+                                    class="filter-btn text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1.5 rounded border border-orange-800"
+                                    data-filter="high-risk">暴雷指數 >= 60</button>
+                                <button
+                                    class="filter-btn text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1.5 rounded border border-blue-800"
+                                    data-filter="fcf-neg">自由現金流 < 0</button>
+                                        <button
+                                            class="filter-btn text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1.5 rounded border border-purple-800"
+                                            data-filter="tcri-bad">TCRI 高風險 (7-9)</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto max-h-[600px] overflow-y-auto relative">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="text-gray-400 text-xs uppercase bg-gray-800 whitespace-nowrap sticky-header">
+                            <!-- 加入 onclick 排序功能 -->
+                            <th class="px-5 py-4 cursor-pointer hover:text-white sticky top-0 bg-gray-800 z-40 transition"
+                                onclick="toggleCodeSort()">
+                                公司/代號 <i id="sort-icon-code" class="fa-solid fa-sort text-gray-500 ml-1"></i>
+                            </th>
+                            <th class="px-5 py-4 text-right sticky top-0 bg-gray-800 z-40">現金部位 (百萬)</th>
+                            <!-- Tooltip 顯示範圍修正 -->
+                            <th class="px-5 py-4 text-right group relative cursor-help sticky top-0 bg-gray-800 z-40">
+                                短期承壓債務 <i class="fa-solid fa-circle-info text-gray-500"></i>
+                                <div
+                                    class="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 w-64 bg-gray-200 text-gray-900 normal-case rounded-lg shadow-xl hidden group-hover:block z-[100] p-3 text-xs whitespace-normal break-words text-left">
+                                    <strong class="text-red-600 block mb-1">計算說明：</strong>
+                                    短期借款 + 一年內到期長期負債。<br>代表企業一年內必須擠出現金償還的剛性債務，是引發違約的最直接壓力源。
+                                </div>
+                            </th>
+                            <th class="px-5 py-4 text-right sticky top-0 bg-gray-800 z-40">利息保障倍數</th>
+                            <th class="px-5 py-4 text-right group relative cursor-help sticky top-0 bg-gray-800 z-40">
+                                自由現金流 <i class="fa-solid fa-circle-info text-gray-500"></i>
+                                <div
+                                    class="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 w-64 bg-gray-200 text-gray-900 normal-case rounded-lg shadow-xl hidden group-hover:block z-[100] p-3 text-xs whitespace-normal break-words text-left">
+                                    <strong class="text-blue-600 block mb-1">計算說明：</strong>
+                                    營業活動現金流 - 資本支出。<br>負數代表企業營運不但沒賺進真金白銀，還在持續失血，必須依賴外部借款來維持運作。
+                                </div>
+                            </th>
+                            <th class="px-5 py-4 text-right sticky top-0 bg-gray-800 z-40">速動比率 / 異常應收</th>
+                            <!-- 暴雷指數標頭：加入 onclick 排序與 sort icon -->
+                            <th class="px-5 py-4 text-center group relative sticky top-0 bg-gray-800 z-40 cursor-pointer hover:text-white transition"
+                                onclick="toggleScoreSort()">
+                                暴雷指數 (0-100)
+                                <i id="sort-icon-score" class="fa-solid fa-sort-down text-blue-400 ml-1"></i>
+                                <i class="fa-solid fa-circle-info text-gray-500 ml-1 cursor-help"></i>
+                                <div
+                                    class="absolute top-full right-0 mt-2 w-64 bg-gray-200 text-gray-900 normal-case rounded-lg shadow-xl hidden group-hover:block z-[100] p-3 text-xs text-left whitespace-normal break-words pointer-events-none">
+                                    <strong class="text-red-600 block mb-1">計算說明：</strong>
+                                    綜合評估資金缺口(30%)、利息支付力(20%)、掏空疑慮(15%)、營運現金流(15%)、速動比率(10%)與TCRI評等(10%)。<br>分數越高代表違約倒閉機率越大。
+                                </div>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="company-table" class="divide-y divide-gray-700 text-sm cursor-pointer">
+                        <!-- 由 JavaScript 自動填充 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 每日總體檢與演算法說明 -->
+        <div class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+
+            <!-- 全新模組：單一公司深度健康診斷 -->
+            <div class="bg-dark-card p-6 rounded-2xl border border-gray-700 relative">
+                <h2 class="text-lg font-bold mb-4 text-blue-400 border-b border-gray-700 pb-2"><i
+                        class="fa-solid fa-stethoscope mr-2"></i>單一公司深度健康診斷</h2>
+
+                <div id="single-company-panel" class="space-y-5">
+                    <!-- JS 動態寫入內容 -->
+                </div>
+            </div>
+
+            <!-- 演算法說明補齊滿分 100 分 -->
+            <div class="bg-dark-card p-6 rounded-2xl border border-gray-700">
+                <h2 class="text-lg font-bold mb-4 text-gray-300 border-b border-gray-700 pb-2"><i
+                        class="fa-solid fa-gears mr-2"></i>專家級暴雷演算法設定 (滿分 100 分)</h2>
+                <div class="text-sm space-y-2 mt-4">
+                    <div class="flex justify-between items-center p-2 bg-red-500/10 border-l-4 border-red-500 rounded">
+                        <div>
+                            <p class="font-bold text-red-400">1. 流動性死亡交叉</p>
+                            <p class="text-gray-400 text-xs mt-0.5">短債 > 現金 (超額1.5倍得滿分)</p>
+                        </div>
+                        <span class="font-bold text-red-400">30 分</span>
+                    </div>
+                    <div
+                        class="flex justify-between items-center p-2 bg-orange-500/10 border-l-4 border-orange-500 rounded">
+                        <div>
+                            <p class="font-bold text-orange-400">2. 獲利無法掩護利息</p>
+                            <p class="text-gray-400 text-xs mt-0.5">利息保障倍數 < 1</p>
+                        </div>
+                        <span class="font-bold text-orange-400">20 分</span>
+                    </div>
+                    <div
+                        class="flex justify-between items-center p-2 bg-yellow-500/10 border-l-4 border-yellow-500 rounded">
+                        <div>
+                            <p class="font-bold text-yellow-400">3. 掏空與資產品質疑慮</p>
+                            <p class="text-gray-400 text-xs mt-0.5">其他應收款佔現金 > 50%</p>
+                        </div>
+                        <span class="font-bold text-yellow-400">15 分</span>
+                    </div>
+                    <div
+                        class="flex justify-between items-center p-2 bg-blue-500/10 border-l-4 border-blue-500 rounded">
+                        <div>
+                            <p class="font-bold text-blue-400">4. 營運持續失血</p>
+                            <p class="text-gray-400 text-xs mt-0.5">自由現金流為負數</p>
+                        </div>
+                        <span class="font-bold text-blue-400">15 分</span>
+                    </div>
+                    <div
+                        class="flex justify-between items-center p-2 bg-teal-500/10 border-l-4 border-teal-500 rounded">
+                        <div>
+                            <p class="font-bold text-teal-400">5. 短期變現力衰竭</p>
+                            <p class="text-gray-400 text-xs mt-0.5">速動比率 < 50%</p>
+                        </div>
+                        <span class="font-bold text-teal-400">10 分</span>
+                    </div>
+                    <div
+                        class="flex justify-between items-center p-2 bg-purple-500/10 border-l-4 border-purple-500 rounded">
+                        <div>
+                            <p class="font-bold text-purple-400">6. TCRI 高風險評等</p>
+                            <p class="text-gray-400 text-xs mt-0.5">TCRI 等級為 7、8、9</p>
+                        </div>
+                        <span class="font-bold text-purple-400">10 分</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 載入全市場 162 檔最新財報數據 (千元轉百萬，已移除營收屬性)
+        const rawCompanyData = [
+            { code: "1101", name: "台泥", tcri: "4", cash: 93299, stDebtTotal: 5852 + 51824, intCov: 4.35, fcf: 18677, quickRatio: 151.48, otherRec: 5626 },
+            { code: "1256", name: "鮮活果汁-KY", tcri: "5", cash: 989, stDebtTotal: 0 + 184, intCov: 75.7, fcf: -314, quickRatio: 246.92, otherRec: 17 },
+            { code: "1316", name: "上曜", tcri: "8", cash: 2925, stDebtTotal: 7332 + 487, intCov: 7.41, fcf: 1286, quickRatio: 36.23, otherRec: 71 },
+            { code: "1338", name: "廣華-KY", tcri: "6", cash: 2348, stDebtTotal: 1527 + 743, intCov: -0.76, fcf: -53, quickRatio: 99.89, otherRec: 0 },
+            { code: "1402", name: "遠東新", tcri: "3", cash: 43642, stDebtTotal: 40646 + 25726, intCov: 6.54, fcf: 18494, quickRatio: 58.87, otherRec: 6029 },
+            { code: "1436", name: "華友聯", tcri: "8", cash: 2030, stDebtTotal: 22 + 5997, intCov: 3.51, fcf: -1088, quickRatio: 21.48, otherRec: 0 },
+            { code: "1438", name: "三地開發", tcri: "8", cash: 78, stDebtTotal: 3930 + 3998, intCov: -0.52, fcf: 42, quickRatio: 2.11, otherRec: 140 },
+            { code: "1466", name: "聚隆", tcri: "7", cash: 501, stDebtTotal: 50 + 10, intCov: 6.82, fcf: 9, quickRatio: 170.58, otherRec: 9 },
+            { code: "1472", name: "三洋實業", tcri: "6", cash: 1420, stDebtTotal: 80 + 743, intCov: 17.71, fcf: 941, quickRatio: 64.99, otherRec: 13 },
+            { code: "1474", name: "弘裕", tcri: "6", cash: 748, stDebtTotal: 503 + 55, intCov: 0.61, fcf: 47, quickRatio: 133.83, otherRec: 20 },
+            { code: "1514", name: "亞力", tcri: "6", cash: 1240, stDebtTotal: 1229 + 29, intCov: 23.63, fcf: 505, quickRatio: 103.13, otherRec: 74 },
+            { code: "1526", name: "日馳", tcri: "8", cash: 471, stDebtTotal: 92 + 569, intCov: -4.94, fcf: 7, quickRatio: 64.98, otherRec: 1 },
+            { code: "1536", name: "和大", tcri: "8", cash: 729, stDebtTotal: 2334 + 2368, intCov: -1.11, fcf: 6, quickRatio: 35.53, otherRec: 45 },
+            { code: "1560", name: "中砂", tcri: "4", cash: 2323, stDebtTotal: 744 + 455, intCov: 68.91, fcf: 406, quickRatio: 102.48, otherRec: 34 },
+            { code: "1586", name: "和勤", tcri: "8", cash: 436, stDebtTotal: 0 + 559, intCov: 5.02, fcf: 11, quickRatio: 97.66, otherRec: 55 },
+            { code: "1589", name: "永冠-KY", tcri: "D", cash: 1978, stDebtTotal: 5431 + 1904, intCov: -2.19, fcf: -999, quickRatio: 55.62, otherRec: 0 },
+            { code: "1595", name: "川寶", tcri: "6", cash: 940, stDebtTotal: 248 + 43, intCov: -4.88, fcf: -31, quickRatio: 153.4, otherRec: 10 },
+            { code: "1598", name: "岱宇", tcri: "7", cash: 834, stDebtTotal: 2269 + 427, intCov: 1.97, fcf: -26, quickRatio: 55.32, otherRec: 450 },
+            { code: "1609", name: "大亞", tcri: "5", cash: 8193, stDebtTotal: 11006 + 1254, intCov: 7.13, fcf: -2201, quickRatio: 83.89, otherRec: 189 },
+            { code: "1623", name: "大東電", tcri: "7", cash: 607, stDebtTotal: 1685 + 321, intCov: 10.37, fcf: 124, quickRatio: 43.04, otherRec: 28 },
+            { code: "1717", name: "長興", tcri: "3", cash: 9886, stDebtTotal: 4699 + 5039, intCov: 12.29, fcf: -988, quickRatio: 121.78, otherRec: 666 },
+            { code: "1781", name: "合世", tcri: "7", cash: 222, stDebtTotal: 0 + 0, intCov: -9.59, fcf: 2, quickRatio: 185.58, otherRec: 0 },
+            { code: "1786", name: "科妍", tcri: "6", cash: 677, stDebtTotal: 0 + 0, intCov: 9.8, fcf: 108, quickRatio: 563.74, otherRec: 7 },
+            { code: "1909", name: "榮成", tcri: "8", cash: 1253, stDebtTotal: 6202 + 7682, intCov: 1.93, fcf: -648, quickRatio: 45.65, otherRec: 581 },
+            { code: "2034", name: "允強", tcri: "4", cash: 917, stDebtTotal: 8097 + 611, intCov: 2.37, fcf: 132, quickRatio: 27.26, otherRec: 361 },
+            { code: "2104", name: "國際中橡", tcri: "5", cash: 13477, stDebtTotal: 11118 + 3352, intCov: -1.64, fcf: 65, quickRatio: 102.24, otherRec: 17 },
+            { code: "2201", name: "裕隆", tcri: "5", cash: 10847, stDebtTotal: 47263 + 15320, intCov: 8.25, fcf: 6277, quickRatio: 93.51, otherRec: 14035 },
+            { code: "2228", name: "劍麟", tcri: "5", cash: 502, stDebtTotal: 0 + 8, intCov: 34.21, fcf: -333, quickRatio: 329.36, otherRec: 73 },
+            { code: "2233", name: "宇隆", tcri: "4", cash: 1112, stDebtTotal: 146 + 114, intCov: 13, fcf: -114, quickRatio: 255.81, otherRec: 21 },
+            { code: "2236", name: "百達-KY", tcri: "7", cash: 983, stDebtTotal: 399 + 465, intCov: 2.52, fcf: -240, quickRatio: 114.61, otherRec: 92 },
+            { code: "2247", name: "汎德永業", tcri: "4", cash: 5126, stDebtTotal: 0 + 0, intCov: 33.04, fcf: -354, quickRatio: 141.47, otherRec: 566 },
+            { code: "2303", name: "聯電", tcri: "3", cash: 124706, stDebtTotal: 2806 + 9159, intCov: 125.77, fcf: 62513, quickRatio: 176.61, otherRec: 1706 },
+            { code: "2329", name: "華泰", tcri: "4", cash: 3029, stDebtTotal: 281 + 147, intCov: 31.48, fcf: -102, quickRatio: 98.54, otherRec: 221 },
+            { code: "2337", name: "旺宏", tcri: "5", cash: 22294, stDebtTotal: 0 + 8208, intCov: 93.23, fcf: 1730, quickRatio: 180, otherRec: 405 },
+            { code: "2351", name: "順德", tcri: "5", cash: 1320, stDebtTotal: 1236 + 223, intCov: 32.35, fcf: 52, quickRatio: 91.6, otherRec: 18 },
+            { code: "2374", name: "佳能", tcri: "6", cash: 2386, stDebtTotal: 375 + 0, intCov: 81.4, fcf: 690, quickRatio: 85.32, otherRec: 0 },
+            { code: "2402", name: "毅嘉", tcri: "5", cash: 3157, stDebtTotal: 1282 + 757, intCov: 7.69, fcf: -890, quickRatio: 129.6, otherRec: 56 },
+            { code: "2427", name: "三商電", tcri: "6", cash: 1122, stDebtTotal: 0 + 465, intCov: 14.94, fcf: 672, quickRatio: 61.89, otherRec: 2 },
+            { code: "2436", name: "偉詮電", tcri: "5", cash: 1488, stDebtTotal: 0 + 869, intCov: 99.83, fcf: 25, quickRatio: 210.73, otherRec: 26 },
+            { code: "2439", name: "美律", tcri: "3", cash: 7333, stDebtTotal: 1952 + 88, intCov: 7.4, fcf: 265, quickRatio: 114.55, otherRec: 520 },
+            { code: "2442", name: "新美齊", tcri: "7", cash: 3234, stDebtTotal: 9034 + 1271, intCov: 3.01, fcf: 1306, quickRatio: 29.85, otherRec: 58 },
+            { code: "2455", name: "全新", tcri: "5", cash: 1649, stDebtTotal: 0 + 0, intCov: 81.76, fcf: 510, quickRatio: 160.28, otherRec: 0 },
+            { code: "2467", name: "志聖", tcri: "5", cash: 2643, stDebtTotal: 1020 + 0, intCov: 33.6, fcf: -867, quickRatio: 71.91, otherRec: 254 },
+            { code: "2476", name: "鉅祥", tcri: "4", cash: 3484, stDebtTotal: 80 + 298, intCov: 198.39, fcf: 573, quickRatio: 268.42, otherRec: 60 },
+            { code: "2486", name: "一詮", tcri: "6", cash: 1202, stDebtTotal: 2053 + 79, intCov: 6.2, fcf: -167, quickRatio: 125.97, otherRec: 72 },
+            { code: "2528", name: "皇普", tcri: "8", cash: 485, stDebtTotal: 1826 + 5657, intCov: 17.83, fcf: -23, quickRatio: 6.52, otherRec: 174 },
+            { code: "2530", name: "華建", tcri: "7", cash: 2474, stDebtTotal: 6849 + 6621, intCov: -1.22, fcf: -1200, quickRatio: 13.75, otherRec: 0 },
+            { code: "2548", name: "華固", tcri: "4", cash: 5047, stDebtTotal: 11687 + 2111, intCov: 5.43, fcf: -1924, quickRatio: 23.29, otherRec: 67 },
+            { code: "2641", name: "正德", tcri: "6", cash: 1490, stDebtTotal: 5 + 374, intCov: 5.2, fcf: 158, quickRatio: 212.24, otherRec: 0 },
+            { code: "2727", name: "王品", tcri: "4", cash: 3154, stDebtTotal: 0 + 0, intCov: 14.84, fcf: 353, quickRatio: 75.48, otherRec: 7 },
+            { code: "2732", name: "六角", tcri: "5", cash: 867, stDebtTotal: 745 + 44, intCov: 6.68, fcf: 126, quickRatio: 76.69, otherRec: 24 },
+            { code: "2743", name: "山富", tcri: "4", cash: 1187, stDebtTotal: 0 + 0, intCov: 15.54, fcf: 239, quickRatio: 100.81, otherRec: 414 },
+            { code: "2745", name: "五福", tcri: "4", cash: 1715, stDebtTotal: 0 + 0, intCov: 32.06, fcf: 265, quickRatio: 119.41, otherRec: 9 },
+            { code: "2753", name: "八方雲集", tcri: "4", cash: 1608, stDebtTotal: 111 + 30, intCov: 13.34, fcf: -11, quickRatio: 135.56, otherRec: 6 },
+            { code: "2755", name: "揚秦", tcri: "5", cash: 718, stDebtTotal: 0 + 0, intCov: 38.25, fcf: 158, quickRatio: 133.21, otherRec: 0 },
+            { code: "2756", name: "聯發國際", tcri: "5", cash: 234, stDebtTotal: 186 + 110, intCov: 10.68, fcf: 3, quickRatio: 100.54, otherRec: 5 },
+            { code: "2906", name: "高林", tcri: "5", cash: 984, stDebtTotal: 2227 + 588, intCov: 7.8, fcf: 583, quickRatio: 68.53, otherRec: 0 },
+            { code: "3011", name: "今皓", tcri: "8", cash: 198, stDebtTotal: 184 + 3, intCov: -18.6, fcf: -57, quickRatio: 96.91, otherRec: 4 },
+            { code: "3013", name: "晟銘電", tcri: "5", cash: 1084, stDebtTotal: 80 + 57, intCov: 134.53, fcf: -33, quickRatio: 135.87, otherRec: 0 },
+            { code: "3016", name: "嘉晶", tcri: "6", cash: 2727, stDebtTotal: 450 + 0, intCov: 36.79, fcf: 3, quickRatio: 254.35, otherRec: 37 },
+            { code: "3028", name: "增你強", tcri: "6", cash: 4817, stDebtTotal: 19332 + 0, intCov: 4.55, fcf: -20, quickRatio: 75.44, otherRec: 43 },
+            { code: "3032", name: "偉訓", tcri: "7", cash: 2134, stDebtTotal: 1068 + 486, intCov: 3.57, fcf: 1293, quickRatio: 101.65, otherRec: 88 },
+            { code: "3033", name: "威健", tcri: "6", cash: 3711, stDebtTotal: 22319 + 60, intCov: 5.41, fcf: -220, quickRatio: 73.46, otherRec: 750 },
+            { code: "3037", name: "欣興", tcri: "4", cash: 93096, stDebtTotal: 11415 + 8422, intCov: 23.36, fcf: -26817, quickRatio: 144.45, otherRec: 1506 },
+            { code: "3040", name: "遠見", tcri: "6", cash: 997, stDebtTotal: 0 + 330, intCov: 1.21, fcf: 250, quickRatio: 386.96, otherRec: 40 },
+            { code: "3045", name: "台灣大", tcri: "2", cash: 12123, stDebtTotal: 8600 + 11911, intCov: 17.5, fcf: 15390, quickRatio: 31.15, otherRec: 3760 },
+            { code: "3081", name: "聯亞", tcri: "6", cash: 513, stDebtTotal: 0 + 0, intCov: 507.57, fcf: -80, quickRatio: 220.66, otherRec: 0 },
+            { code: "3088", name: "艾訊", tcri: "5", cash: 1521, stDebtTotal: 0 + 174, intCov: 133.37, fcf: -174, quickRatio: 117.34, otherRec: 54 },
+            { code: "3095", name: "及成", tcri: "9", cash: 146, stDebtTotal: 0 + 182, intCov: 2.78, fcf: 107, quickRatio: 94.1, otherRec: 2 },
+            { code: "3122", name: "笙泉", tcri: "7", cash: 36, stDebtTotal: 0 + 16, intCov: -30.49, fcf: 8, quickRatio: 170.57, otherRec: 1 },
+            { code: "3131", name: "弘塑", tcri: "5", cash: 5133, stDebtTotal: 820 + 126, intCov: 25.45, fcf: 293, quickRatio: 79.86, otherRec: 9 },
+            { code: "3135", name: "凌航", tcri: "6", cash: 242, stDebtTotal: 1903 + 0, intCov: 40.31, fcf: -1491, quickRatio: 55.49, otherRec: 80 },
+            { code: "3141", name: "晶宏", tcri: "6", cash: 1036, stDebtTotal: 589 + 112, intCov: 21.44, fcf: -148, quickRatio: 146.75, otherRec: 2 },
+            { code: "3149", name: "正達", tcri: "9", cash: 1204, stDebtTotal: 568 + 246, intCov: -7.31, fcf: 154, quickRatio: 84.55, otherRec: 0 },
+            { code: "3167", name: "大量", tcri: "6", cash: 1440, stDebtTotal: 780 + 27, intCov: 73.44, fcf: -42, quickRatio: 85.62, otherRec: 19 },
+            { code: "3188", name: "鑫龍騰", tcri: "7", cash: 1342, stDebtTotal: 600 + 3750, intCov: 51.12, fcf: -14, quickRatio: 25.08, otherRec: 0 },
+            { code: "3207", name: "耀勝", tcri: "7", cash: 634, stDebtTotal: 1484 + 331, intCov: -2.17, fcf: 311, quickRatio: 50.74, otherRec: 37 },
+            { code: "3219", name: "倚強科", tcri: "7", cash: 1155, stDebtTotal: 364 + 7, intCov: 70.32, fcf: 94, quickRatio: 136.67, otherRec: 127 },
+            { code: "3257", name: "虹冠電", tcri: "6", cash: 172, stDebtTotal: 119 + 0, intCov: 11.94, fcf: 389, quickRatio: 404.81, otherRec: 42 },
+            { code: "3272", name: "東碩", tcri: "8", cash: 605, stDebtTotal: 531 + 1817, intCov: -2.5, fcf: 1434, quickRatio: 48.02, otherRec: 16 },
+            { code: "3284", name: "太普高", tcri: "7", cash: 621, stDebtTotal: 274 + 211, intCov: 6.99, fcf: -146, quickRatio: 123.33, otherRec: 11 },
+            { code: "3294", name: "英濟", tcri: "7", cash: 1272, stDebtTotal: 168 + 114, intCov: -0.81, fcf: -330, quickRatio: 159.58, otherRec: 85 },
+            { code: "3303", name: "岱稜", tcri: "6", cash: 876, stDebtTotal: 159 + 50, intCov: 39.41, fcf: -52, quickRatio: 148.04, otherRec: 0 },
+            { code: "3305", name: "昇貿", tcri: "6", cash: 2093, stDebtTotal: 6362 + 183, intCov: 10.59, fcf: 310, quickRatio: 101.01, otherRec: 0 },
+            { code: "3312", name: "弘憶股", tcri: "6", cash: 2514, stDebtTotal: 3226 + 978, intCov: 9.62, fcf: 1500, quickRatio: 94.05, otherRec: 79 },
+            { code: "3313", name: "斐成", tcri: "8", cash: 804, stDebtTotal: 846 + 0, intCov: -8.47, fcf: -2, quickRatio: 89.68, otherRec: 1 },
+            { code: "3322", name: "建舜電", tcri: "6", cash: 272, stDebtTotal: 636 + 183, intCov: -7.7, fcf: -25, quickRatio: 69.1, otherRec: 7 },
+            { code: "3324", name: "雙鴻", tcri: "4", cash: 4572, stDebtTotal: 1975 + 157, intCov: 28.12, fcf: 1189, quickRatio: 118.06, otherRec: 89 },
+            { code: "3346", name: "麗清", tcri: "7", cash: 2721, stDebtTotal: 1713 + 159, intCov: 0.05, fcf: -71, quickRatio: 128.03, otherRec: 200 },
+            { code: "3357", name: "臺慶科", tcri: "4", cash: 2591, stDebtTotal: 635 + 644, intCov: 62.2, fcf: -205, quickRatio: 152, otherRec: 251 },
+            { code: "3362", name: "先進光", tcri: "7", cash: 1035, stDebtTotal: 1730 + 61, intCov: -6.61, fcf: -1940, quickRatio: 97.63, otherRec: 7 },
+            { code: "3376", name: "新日興", tcri: "4", cash: 1804, stDebtTotal: 890 + 0, intCov: 6.83, fcf: 861, quickRatio: 168.7, otherRec: 224 },
+            { code: "3388", name: "崇越電", tcri: "4", cash: 2714, stDebtTotal: 179 + 49, intCov: 36.75, fcf: 38, quickRatio: 293.63, otherRec: 8 },
+            { code: "3390", name: "旭軟", tcri: "7", cash: 511, stDebtTotal: 220 + 0, intCov: -11.7, fcf: -65, quickRatio: 215.68, otherRec: 2 },
+            { code: "3416", name: "融程電", tcri: "5", cash: 710, stDebtTotal: 0 + 417, intCov: 92.31, fcf: -89, quickRatio: 97.38, otherRec: 10 },
+            { code: "3479", name: "安勤", tcri: "5", cash: 1438, stDebtTotal: 1174 + 649, intCov: 20.79, fcf: 119, quickRatio: 89.52, otherRec: 45 },
+            { code: "3483", name: "力致", tcri: "6", cash: 1848, stDebtTotal: 804 + 216, intCov: 9.06, fcf: 121, quickRatio: 124.18, otherRec: 55 },
+            { code: "3484", name: "崧騰", tcri: "5", cash: 1885, stDebtTotal: 164 + 5, intCov: 22.28, fcf: -14, quickRatio: 178.9, otherRec: 0 },
+            { code: "3491", name: "昇達科", tcri: "5", cash: 1979, stDebtTotal: 140 + 0, intCov: 42.36, fcf: -1581, quickRatio: 237.56, otherRec: 26 },
+            { code: "3512", name: "皇龍", tcri: "7", cash: 632, stDebtTotal: 2604 + 599, intCov: 2.02, fcf: 1, quickRatio: 16.6, otherRec: 0 },
+            { code: "3516", name: "亞帝歐", tcri: "7", cash: 228, stDebtTotal: 150 + 61, intCov: 12.89, fcf: 70, quickRatio: 108, otherRec: 6 },
+            { code: "3518", name: "柏騰", tcri: "8", cash: 587, stDebtTotal: 144 + 35, intCov: -0.62, fcf: 7, quickRatio: 378.17, otherRec: 0 },
+            { code: "3522", name: "御嵿", tcri: "8", cash: 375, stDebtTotal: 231 + 183, intCov: -10.15, fcf: 30, quickRatio: 42.34, otherRec: 3 },
+            { code: "3526", name: "凡甲", tcri: "5", cash: 1763, stDebtTotal: 0 + 885, intCov: 31.75, fcf: -216, quickRatio: 267.47, otherRec: 61 },
+            { code: "3543", name: "州巧", tcri: "6", cash: 1091, stDebtTotal: 148 + 0, intCov: -5.55, fcf: 93, quickRatio: 242.57, otherRec: 263 },
+            { code: "3548", name: "兆利", tcri: "4", cash: 3445, stDebtTotal: 120 + 801, intCov: -0.74, fcf: 356, quickRatio: 167.22, otherRec: 23 },
+            { code: "3551", name: "世禾", tcri: "5", cash: 1087, stDebtTotal: 0 + 0, intCov: 84.69, fcf: 340, quickRatio: 293.98, otherRec: 0 },
+            { code: "3564", name: "其陽", tcri: "6", cash: 430, stDebtTotal: 585 + 26, intCov: 5.04, fcf: 4, quickRatio: 67.99, otherRec: 0 },
+            { code: "3583", name: "辛耘", tcri: "4", cash: 7428, stDebtTotal: 91 + 85, intCov: 83.14, fcf: -725, quickRatio: 44.74, otherRec: 105 },
+            { code: "3587", name: "閎康", tcri: "4", cash: 3483, stDebtTotal: 88 + 330, intCov: 22.3, fcf: -572, quickRatio: 239.17, otherRec: 1 },
+            { code: "3591", name: "艾笛森", tcri: "6", cash: 999, stDebtTotal: 85 + 15, intCov: 4.19, fcf: -312, quickRatio: 258.76, otherRec: 6 },
+            { code: "3605", name: "宏致", tcri: "5", cash: 2664, stDebtTotal: 665 + 42, intCov: 15.53, fcf: -184, quickRatio: 138.13, otherRec: 251 },
+            { code: "3617", name: "碩天", tcri: "4", cash: 4769, stDebtTotal: 0 + 0, intCov: 96.1, fcf: 60, quickRatio: 191.74, otherRec: 178 },
+            { code: "3680", name: "家登", tcri: "5", cash: 5612, stDebtTotal: 663 + 1288, intCov: 13.62, fcf: -1310, quickRatio: 179.13, otherRec: 31 },
+            { code: "3684", name: "榮昌", tcri: "6", cash: 323, stDebtTotal: 0 + 0, intCov: 15.67, fcf: 87, quickRatio: 202.13, otherRec: 1 },
+            { code: "3687", name: "歐買尬", tcri: "5", cash: 1352, stDebtTotal: 0 + 0, intCov: 22.57, fcf: 19, quickRatio: 104.9, otherRec: 975 },
+            { code: "3689", name: "湧德", tcri: "6", cash: 1794, stDebtTotal: 881 + 52, intCov: 26.14, fcf: 27, quickRatio: 123.29, otherRec: 61 },
+            { code: "3691", name: "碩禾", tcri: "7", cash: 983, stDebtTotal: 1534 + 296, intCov: 3.6, fcf: 12, quickRatio: 169.27, otherRec: 99 },
+            { code: "3707", name: "漢磊", tcri: "7", cash: 4094, stDebtTotal: 793 + 0, intCov: 4.42, fcf: -1660, quickRatio: 304.18, otherRec: 1706 },
+            { code: "3708", name: "上緯投控", tcri: "6", cash: 4459, stDebtTotal: 356 + 314, intCov: 17.69, fcf: 439, quickRatio: 157.07, otherRec: 3 },
+            { code: "3715", name: "定穎投控", tcri: "6", cash: 7163, stDebtTotal: 4382 + 3108, intCov: -0.59, fcf: -1808, quickRatio: 91.42, otherRec: 281 },
+            { code: "3717", name: "聯嘉投控", tcri: "7", cash: 1163, stDebtTotal: 1491 + 232, intCov: 8.29, fcf: 0, quickRatio: 67.76, otherRec: 59 },
+            { code: "4113", name: "聯上", tcri: "7", cash: 312, stDebtTotal: 7975 + 999, intCov: -0.59, fcf: 23, quickRatio: 2.77, otherRec: 0 },
+            { code: "4123", name: "晟德", tcri: "6", cash: 3354, stDebtTotal: 140 + 211, intCov: -285.01, fcf: -12811, quickRatio: 160.94, otherRec: 0 },
+            { code: "4129", name: "聯合", tcri: "6", cash: 579, stDebtTotal: 1107 + 95, intCov: 13.06, fcf: 490, quickRatio: 63.96, otherRec: 50 },
+            { code: "4137", name: "麗豐-KY", tcri: "4", cash: 4384, stDebtTotal: 960 + 1065, intCov: 10.69, fcf: -279, quickRatio: 187.42, otherRec: 55 },
+            { code: "4164", name: "承業醫", tcri: "6", cash: 1367, stDebtTotal: 1330 + 675, intCov: 3.52, fcf: 166, quickRatio: 88, otherRec: 10 },
+            { code: "4168", name: "醣聯", tcri: "7", cash: 435, stDebtTotal: 0 + 0, intCov: -13.49, fcf: -1, quickRatio: 1025.39, otherRec: 21 },
+            { code: "4190", name: "佐登-KY", tcri: "7", cash: 755, stDebtTotal: 400 + 705, intCov: 0.94, fcf: 130, quickRatio: 39.26, otherRec: 0 },
+            { code: "4416", name: "三圓", tcri: "9", cash: 17, stDebtTotal: 1662 + 3795, intCov: 3.75, fcf: 590, quickRatio: 23.5, otherRec: 439 },
+            { code: "4438", name: "廣越", tcri: "4", cash: 1984, stDebtTotal: 5446 + 209, intCov: 9.15, fcf: 271, quickRatio: 86.52, otherRec: 61 },
+            { code: "4439", name: "冠星-KY", tcri: "5", cash: 405, stDebtTotal: 547 + 134, intCov: 9.34, fcf: 174, quickRatio: 72.6, otherRec: 382 },
+            { code: "4442", name: "竣邦-KY", tcri: "6", cash: 652, stDebtTotal: 0 + 0, intCov: 64.77, fcf: -15, quickRatio: 266.46, otherRec: 26 },
+            { code: "4503", name: "金雨", tcri: "7", cash: 1111, stDebtTotal: 0 + 10, intCov: 67.76, fcf: -537, quickRatio: 1197.99, otherRec: 0 },
+            { code: "4510", name: "高鋒", tcri: "8", cash: 498, stDebtTotal: 852 + 369, intCov: 12.36, fcf: 6, quickRatio: 61.13, otherRec: 61 },
+            { code: "4542", name: "科嶠", tcri: "7", cash: 442, stDebtTotal: 146 + 90, intCov: 16.3, fcf: -19, quickRatio: 88.18, otherRec: 3 },
+            { code: "4549", name: "桓達", tcri: "5", cash: 939, stDebtTotal: 0 + 9, intCov: 32.2, fcf: 122, quickRatio: 403.75, otherRec: 6 },
+            { code: "4555", name: "氣立", tcri: "7", cash: 601, stDebtTotal: 196 + 61, intCov: 8.23, fcf: 24, quickRatio: 217.99, otherRec: 1 },
+            { code: "4558", name: "寶緯", tcri: "8", cash: 425, stDebtTotal: 717 + 50, intCov: 4.29, fcf: -28, quickRatio: 76.49, otherRec: 0 },
+            { code: "4564", name: "元翎", tcri: "6", cash: 831, stDebtTotal: 182 + 644, intCov: -7.92, fcf: 40, quickRatio: 105.34, otherRec: 15 },
+            { code: "4566", name: "時碩工業", tcri: "5", cash: 2001, stDebtTotal: 931 + 989, intCov: 4.69, fcf: -495, quickRatio: 103.77, otherRec: 73 },
+            { code: "4569", name: "六方科-KY", tcri: "6", cash: 909, stDebtTotal: 0 + 0, intCov: 34.06, fcf: 116, quickRatio: 573.29, otherRec: 24 },
+            { code: "4572", name: "駐龍", tcri: "6", cash: 278, stDebtTotal: 0 + 484, intCov: 13.92, fcf: 30, quickRatio: 138.72, otherRec: 6 },
+            { code: "4581", name: "光隆精密-KY", tcri: "5", cash: 1037, stDebtTotal: 113 + 22, intCov: 9.5, fcf: 96, quickRatio: 181.65, otherRec: 30 },
+            { code: "4714", name: "永捷", tcri: "8", cash: 1329, stDebtTotal: 1810 + 56, intCov: 4.15, fcf: 258, quickRatio: 67.62, otherRec: 5 },
+            { code: "4722", name: "國精化", tcri: "5", cash: 642, stDebtTotal: 468 + 330, intCov: 14.95, fcf: -1117, quickRatio: 114.72, otherRec: 25 },
+            { code: "4739", name: "康普", tcri: "5", cash: 3387, stDebtTotal: 2147 + 998, intCov: 8.71, fcf: 44, quickRatio: 104.76, otherRec: 84 },
+            { code: "4749", name: "新應材", tcri: "5", cash: 1887, stDebtTotal: 0 + 0, intCov: 53.22, fcf: -2655, quickRatio: 374.36, otherRec: 61 },
+            { code: "4760", name: "勤凱", tcri: "6", cash: 212, stDebtTotal: 630 + 5, intCov: 21.95, fcf: -466, quickRatio: 117.34, otherRec: 4 },
+            { code: "4764", name: "雙鍵", tcri: "5", cash: 695, stDebtTotal: 1239 + 83, intCov: 14.26, fcf: 38, quickRatio: 107.23, otherRec: 8 },
+            { code: "4772", name: "台特化", tcri: "6", cash: 2475, stDebtTotal: 0 + 33, intCov: 27.94, fcf: -544, quickRatio: 239.66, otherRec: 0 },
+            { code: "4923", name: "力士", tcri: "8", cash: 213, stDebtTotal: 12 + 0, intCov: 8.03, fcf: 2, quickRatio: 289.34, otherRec: 6 },
+            { code: "4931", name: "新盛力", tcri: "5", cash: 945, stDebtTotal: 0 + 0, intCov: 124.62, fcf: -765, quickRatio: 126.38, otherRec: 1 },
+            { code: "4967", name: "十銓", tcri: "5", cash: 979, stDebtTotal: 5528 + 293, intCov: 51.13, fcf: 124, quickRatio: 65.27, otherRec: 155 },
+            { code: "4973", name: "廣穎", tcri: "6", cash: 744, stDebtTotal: 1754 + 1, intCov: 78.61, fcf: 51, quickRatio: 55.59, otherRec: 70 },
+            { code: "4979", name: "華星光", tcri: "6", cash: 2987, stDebtTotal: 0 + 0, intCov: 81.81, fcf: -4, quickRatio: 304.03, otherRec: 35 },
+            { code: "5201", name: "凱衛", tcri: "6", cash: 177, stDebtTotal: 0 + 0, intCov: -4.89, fcf: 9, quickRatio: 253.07, otherRec: 0 },
+            { code: "5209", name: "新鼎", tcri: "5", cash: 2257, stDebtTotal: 0 + 280, intCov: 89.04, fcf: 52, quickRatio: 98.05, otherRec: 24 },
+            { code: "5212", name: "凌網", tcri: "6", cash: 271, stDebtTotal: 30 + 2, intCov: 17.54, fcf: 3, quickRatio: 265.39, otherRec: 2 },
+            { code: "5244", name: "弘凱", tcri: "6", cash: 1055, stDebtTotal: 67 + 0, intCov: -3.09, fcf: -7, quickRatio: 366.13, otherRec: 2 },
+            { code: "5245", name: "智晶", tcri: "8", cash: 273, stDebtTotal: 370 + 306, intCov: -5.02, fcf: 1, quickRatio: 45.49, otherRec: 1 },
+            { code: "5263", name: "智崴", tcri: "7", cash: 836, stDebtTotal: 683 + 752, intCov: 6.44, fcf: 188, quickRatio: 73.38, otherRec: 6 },
+            { code: "5284", name: "jpp-KY", tcri: "5", cash: 1618, stDebtTotal: 1143 + 545, intCov: 19.58, fcf: 276, quickRatio: 97.84, otherRec: 0 },
+            { code: "5289", name: "宜鼎", tcri: "3", cash: 9477, stDebtTotal: 4985 + 37, intCov: 340.4, fcf: -2172, quickRatio: 145.48, otherRec: 38 },
+            { code: "5291", name: "邑昇", tcri: "6", cash: 187, stDebtTotal: 150 + 61, intCov: 67.39, fcf: -61, quickRatio: 73.68, otherRec: 0 },
+            { code: "5306", name: "桂盟", tcri: "4", cash: 2044, stDebtTotal: 1828 + 993, intCov: 26.5, fcf: 889, quickRatio: 120.03, otherRec: 99 },
+            { code: "5309", name: "系統電", tcri: "6", cash: 3336, stDebtTotal: 23 + 96, intCov: -1.24, fcf: 38, quickRatio: 381.57, otherRec: 50 },
+            { code: "5321", name: "美而快", tcri: "7", cash: 442, stDebtTotal: 1088 + 185, intCov: -0.26, fcf: -7, quickRatio: 30.35, otherRec: 9 },
+            { code: "5388", name: "中磊", tcri: "4", cash: 5560, stDebtTotal: 5638 + 0, intCov: 9.1, fcf: -680, quickRatio: 50.04, otherRec: 797 },
+            { code: "5439", name: "高技", tcri: "5", cash: 2488, stDebtTotal: 400 + 108, intCov: 27.68, fcf: 310, quickRatio: 136.26, otherRec: 94 },
+            { code: "5450", name: "南良", tcri: "7", cash: 766, stDebtTotal: 50 + 26, intCov: 10.85, fcf: 43, quickRatio: 238.8, otherRec: 4 },
+            { code: "5457", name: "宣德", tcri: "5", cash: 6973, stDebtTotal: 4876 + 1974, intCov: 4.14, fcf: -576, quickRatio: 92.58, otherRec: 268 },
+            { code: "5464", name: "霖宏", tcri: "9", cash: 416, stDebtTotal: 1102 + 145, intCov: -0.95, fcf: -411, quickRatio: 99.52, otherRec: 15 },
+            { code: "5534", name: "長虹", tcri: "5", cash: 1704, stDebtTotal: 12745 + 0, intCov: 23.58, fcf: 1614, quickRatio: 8.59, otherRec: 6 },
+            { code: "5536", name: "聖暉*", tcri: "3", cash: 15700, stDebtTotal: 728 + 0, intCov: 488.93, fcf: -40, quickRatio: 116.06, otherRec: 49 },
+            { code: "5608", name: "四維航", tcri: "8", cash: 1063, stDebtTotal: 729 + 1749, intCov: 3.29, fcf: 333, quickRatio: 40.55, otherRec: 37 },
+            { code: "6015", name: "宏遠證", tcri: "N/A", cash: 3203, stDebtTotal: 180 + 278, intCov: 23.48, fcf: 466, quickRatio: 123.71, otherRec: 22 },
+            { code: "6101", name: "寬魚國際", tcri: "N/A", cash: 919, stDebtTotal: 15 + 0, intCov: 16.54, fcf: 3, quickRatio: 375.08, otherRec: 10 },
+            { code: "6104", name: "創惟", tcri: "5", cash: 884, stDebtTotal: 0 + 427, intCov: 53.43, fcf: -1, quickRatio: 101.46, otherRec: 0 },
+            { code: "6111", name: "光聚晶電", tcri: "8", cash: 3012, stDebtTotal: 6687 + 1926, intCov: 2.11, fcf: -451, quickRatio: 55.02, otherRec: 311 },
+            { code: "6117", name: "迎廣", tcri: "7", cash: 765, stDebtTotal: 450 + 789, intCov: 4.32, fcf: 687, quickRatio: 63.57, otherRec: 103 },
+            { code: "6125", name: "廣運", tcri: "6", cash: 2716, stDebtTotal: 401 + 217, intCov: -2.52, fcf: -1416, quickRatio: 130.21, otherRec: 22 },
+            { code: "6126", name: "信音", tcri: "6", cash: 1523, stDebtTotal: 1067 + 342, intCov: 6.23, fcf: 253, quickRatio: 189.3, otherRec: 126 },
+            { code: "6134", name: "萬旭", tcri: "7", cash: 194, stDebtTotal: 221 + 0, intCov: 11.55, fcf: -17, quickRatio: 120.69, otherRec: 4 },
+            { code: "6150", name: "撼訊", tcri: "7", cash: 644, stDebtTotal: 891 + 398, intCov: 5.22, fcf: 16, quickRatio: 51.03, otherRec: 3 },
+            { code: "6156", name: "松上", tcri: "6", cash: 1283, stDebtTotal: 570 + 412, intCov: 7.3, fcf: 453, quickRatio: 116.8, otherRec: 61 },
+            { code: "6163", name: "華電網", tcri: "7", cash: 1497, stDebtTotal: 1306 + 11, intCov: -2.53, fcf: 50, quickRatio: 71.19, otherRec: 4 },
+            { code: "6177", name: "達麗", tcri: "7", cash: 1424, stDebtTotal: 18914 + 2069, intCov: 29.68, fcf: 2236, quickRatio: 5.65, otherRec: 3 },
+            { code: "6179", name: "亞通", tcri: "8", cash: 1866, stDebtTotal: 4929 + 675, intCov: 3.79, fcf: 320, quickRatio: 50.61, otherRec: 182 },
+            { code: "6182", name: "合晶", tcri: "6", cash: 5106, stDebtTotal: 1807 + 594, intCov: 2.88, fcf: -1118, quickRatio: 136.8, otherRec: 75 },
+            { code: "6184", name: "大豐電", tcri: "6", cash: 2747, stDebtTotal: 506 + 1305, intCov: 20.09, fcf: 124, quickRatio: 106.35, otherRec: 22 },
+            { code: "6187", name: "萬潤", tcri: "5", cash: 4550, stDebtTotal: 0 + 1, intCov: 1265.39, fcf: 100, quickRatio: 127.35, otherRec: 4 },
+            { code: "6189", name: "豐藝", tcri: "4", cash: 3108, stDebtTotal: 3078 + 117, intCov: 9.45, fcf: 904, quickRatio: 108.2, otherRec: 1833 },
+            { code: "6190", name: "萬泰科", tcri: "6", cash: 979, stDebtTotal: 2649 + 42, intCov: 9.88, fcf: 221, quickRatio: 95.2, otherRec: 243 },
+            { code: "6197", name: "佳必琪", tcri: "5", cash: 2428, stDebtTotal: 0 + 0, intCov: 88.31, fcf: 92, quickRatio: 178.48, otherRec: 103 },
+            { code: "6199", name: "天品", tcri: "7", cash: 796, stDebtTotal: 10 + 0, intCov: 18.01, fcf: -81, quickRatio: 430.33, otherRec: 6 },
+            { code: "6207", name: "雷科", tcri: "6", cash: 1015, stDebtTotal: 1002 + 93, intCov: 9.19, fcf: -26, quickRatio: 183.91, otherRec: 19 },
+            { code: "6209", name: "今國光", tcri: "6", cash: 424, stDebtTotal: 30 + 27, intCov: 64.58, fcf: -114, quickRatio: 165.02, otherRec: 6 },
+            { code: "6219", name: "富旺", tcri: "9", cash: 652, stDebtTotal: 7159 + 716, intCov: -2.07, fcf: 110, quickRatio: 14.06, otherRec: 0 },
+            { code: "6220", name: "岳豐", tcri: "8", cash: 980, stDebtTotal: 2258 + 413, intCov: 2.66, fcf: -764, quickRatio: 73.66, otherRec: 4 },
+            { code: "6223", name: "旺矽", tcri: "4", cash: 9879, stDebtTotal: 1350 + 60, intCov: 110.27, fcf: -1612, quickRatio: 104.75, otherRec: 38 },
+            { code: "6243", name: "迅杰", tcri: "7", cash: 583, stDebtTotal: 0 + 293, intCov: -23.42, fcf: 306, quickRatio: 203.69, otherRec: 0 },
+            { code: "6269", name: "台郡", tcri: "5", cash: 2740, stDebtTotal: 100 + 333, intCov: -34.81, fcf: 238, quickRatio: 193.53, otherRec: 153 },
+            { code: "6282", name: "康舒", tcri: "5", cash: 6747, stDebtTotal: 4318 + 587, intCov: 2.54, fcf: -3580, quickRatio: 99.61, otherRec: 339 },
+            { code: "6284", name: "佳邦", tcri: "4", cash: 2549, stDebtTotal: 1228 + 1238, intCov: 6.62, fcf: 288, quickRatio: 104.53, otherRec: 232 },
+            { code: "6290", name: "良維", tcri: "5", cash: 2786, stDebtTotal: 0 + 278, intCov: 42, fcf: -387, quickRatio: 164.57, otherRec: 267 },
+            { code: "6425", name: "易發", tcri: "8", cash: 525, stDebtTotal: 553 + 8, intCov: 5.06, fcf: 62, quickRatio: 76.76, otherRec: 6 },
+            { code: "6432", name: "今展科", tcri: "6", cash: 464, stDebtTotal: 0 + 64, intCov: 24.52, fcf: -95, quickRatio: 275.62, otherRec: 7 },
+            { code: "6451", name: "訊芯-KY", tcri: "6", cash: 5572, stDebtTotal: 5301 + 509, intCov: -0.17, fcf: -213, quickRatio: 125.32, otherRec: 122 },
+            { code: "6469", name: "大樹", tcri: "4", cash: 1454, stDebtTotal: 1050 + 0, intCov: 5.76, fcf: 100, quickRatio: 69.57, otherRec: 241 },
+            { code: "6472", name: "保瑞", tcri: "5", cash: 8431, stDebtTotal: 5328 + 2284, intCov: 7.54, fcf: 478, quickRatio: 97.56, otherRec: 411 },
+            { code: "6477", name: "安集", tcri: "7", cash: 575, stDebtTotal: 60 + 645, intCov: 2.47, fcf: -117, quickRatio: 107.56, otherRec: 5 },
+            { code: "6509", name: "聚和", tcri: "5", cash: 1815, stDebtTotal: 200 + 508, intCov: 45.72, fcf: -50, quickRatio: 159.19, otherRec: 14 },
+            { code: "6510", name: "精測", tcri: "4", cash: 5438, stDebtTotal: 0 + 0, intCov: 73.37, fcf: 534, quickRatio: 288.47, otherRec: 4 },
+            { code: "6515", name: "穎崴", tcri: "4", cash: 2974, stDebtTotal: 0 + 0, intCov: 65.99, fcf: 1, quickRatio: 183.15, otherRec: 5 },
+            { code: "6533", name: "晶心科", tcri: "7", cash: 754, stDebtTotal: 0 + 0, intCov: -11.57, fcf: 246, quickRatio: 432.54, otherRec: 19 },
+            { code: "6538", name: "倉和", tcri: "5", cash: 932, stDebtTotal: 160 + 0, intCov: 21.07, fcf: 15, quickRatio: 264.48, otherRec: 0 },
+            { code: "6546", name: "正基", tcri: "6", cash: 1317, stDebtTotal: 30 + 5, intCov: 29.62, fcf: -709, quickRatio: 238.12, otherRec: 39 },
+            { code: "6547", name: "高端疫苗", tcri: "7", cash: 259, stDebtTotal: 0 + 0, intCov: 4.69, fcf: -8, quickRatio: 1743.28, otherRec: 14 },
+            { code: "6552", name: "易華電", tcri: "7", cash: 266, stDebtTotal: 305 + 643, intCov: -6.62, fcf: -43, quickRatio: 44.71, otherRec: 47 },
+            { code: "6570", name: "維田", tcri: "6", cash: 133, stDebtTotal: 30 + 18, intCov: 27.78, fcf: 10, quickRatio: 111.68, otherRec: 0 },
+            { code: "6576", name: "逸達", tcri: "8", cash: 877, stDebtTotal: 0 + 0, intCov: -35.88, fcf: -6, quickRatio: 751.33, otherRec: 0 },
+            { code: "6584", name: "南俊國際", tcri: "6", cash: 762, stDebtTotal: 340 + 118, intCov: 91.78, fcf: 219, quickRatio: 127.54, otherRec: 0 },
+            { code: "6585", name: "鼎基", tcri: "5", cash: 769, stDebtTotal: 58 + 396, intCov: 79.39, fcf: 38, quickRatio: 118.61, otherRec: 0 },
+            { code: "6591", name: "動力-KY", tcri: "7", cash: 1005, stDebtTotal: 45 + 176, intCov: -4.7, fcf: 178, quickRatio: 217.55, otherRec: 2 },
+            { code: "6603", name: "富強鑫", tcri: "6", cash: 696, stDebtTotal: 714 + 47, intCov: 2.63, fcf: -223, quickRatio: 92.38, otherRec: 0 },
+            { code: "6616", name: "特昇-KY", tcri: "6", cash: 313, stDebtTotal: 84 + 107, intCov: -7.56, fcf: 4, quickRatio: 139.84, otherRec: 1 },
+            { code: "6624", name: "萬年清", tcri: "7", cash: 73, stDebtTotal: 0 + 5, intCov: -3.72, fcf: 8, quickRatio: 182.06, otherRec: 44 },
+            { code: "6629", name: "泰金-KY", tcri: "6", cash: 552, stDebtTotal: 259 + 283, intCov: 50.38, fcf: 184, quickRatio: 131.11, otherRec: 20 },
+            { code: "6645", name: "金萬林-創", tcri: "8", cash: 86, stDebtTotal: 195 + 56, intCov: -7.28, fcf: -10, quickRatio: 57.18, otherRec: 0 },
+            { code: "6664", name: "群翊", tcri: "6", cash: 775, stDebtTotal: 0 + 0, intCov: 44.89, fcf: -1, quickRatio: 71.08, otherRec: 72 },
+            { code: "6670", name: "復盛應用", tcri: "3", cash: 10088, stDebtTotal: 976 + 53, intCov: 66.14, fcf: 2607, quickRatio: 151.38, otherRec: 287 },
+            { code: "6672", name: "騰輝電子-KY", tcri: "6", cash: 1254, stDebtTotal: 15 + 8, intCov: 60.84, fcf: 86, quickRatio: 223.33, otherRec: 24 },
+            { code: "6680", name: "鑫創電子", tcri: "6", cash: 199, stDebtTotal: 110 + 5, intCov: 1.03, fcf: 0, quickRatio: 92.5, otherRec: 5 },
+            { code: "6683", name: "雍智科技", tcri: "5", cash: 1599, stDebtTotal: 0 + 0, intCov: 1844.69, fcf: 239, quickRatio: 229.95, otherRec: 0 },
+            { code: "6693", name: "廣閎科", tcri: "6", cash: 470, stDebtTotal: 60 + 15, intCov: 105.34, fcf: -26, quickRatio: 174.08, otherRec: 5 },
+            { code: "6706", name: "惠特", tcri: "7", cash: 827, stDebtTotal: 140 + 204, intCov: -13.44, fcf: 75, quickRatio: 109.6, otherRec: 23 },
+            { code: "6753", name: "龍德造船", tcri: "5", cash: 2512, stDebtTotal: 370 + 588, intCov: 56.68, fcf: 695, quickRatio: 89.16, otherRec: 23 },
+            { code: "6768", name: "志強-KY", tcri: "4", cash: 5817, stDebtTotal: 1722 + 202, intCov: 11.75, fcf: 1213, quickRatio: 140.95, otherRec: 31 },
+            { code: "6771", name: "平和環保-創", tcri: "6", cash: 132, stDebtTotal: 15 + 341, intCov: 15.26, fcf: 442, quickRatio: 90.58, otherRec: 8 },
+            { code: "6796", name: "晉弘", tcri: "7", cash: 445, stDebtTotal: 88 + 214, intCov: -1.69, fcf: 18, quickRatio: 174.73, otherRec: 2 },
+            { code: "6803", name: "崑鼎", tcri: "3", cash: 2199, stDebtTotal: 80 + 0, intCov: 42.09, fcf: -1938, quickRatio: 79.23, otherRec: 93 },
+            { code: "6821", name: "聯寶", tcri: "6", cash: 610, stDebtTotal: 0 + 0, intCov: 17.21, fcf: 4, quickRatio: 372.05, otherRec: 0 },
+            { code: "6830", name: "汎銓", tcri: "5", cash: 682, stDebtTotal: 330 + 556, intCov: 1.84, fcf: -29, quickRatio: 106.83, otherRec: 0 },
+            { code: "6835", name: "圓裕", tcri: "6", cash: 1619, stDebtTotal: 244 + 91, intCov: -1.52, fcf: 29, quickRatio: 191.32, otherRec: 58 },
+            { code: "6840", name: "東研信超", tcri: "6", cash: 206, stDebtTotal: 107 + 196, intCov: 10.67, fcf: 231, quickRatio: 110.89, otherRec: 1 },
+            { code: "6843", name: "進典", tcri: "6", cash: 382, stDebtTotal: 0 + 0, intCov: 5.89, fcf: 68, quickRatio: 276.74, otherRec: 0 },
+            { code: "6846", name: "綠茵", tcri: "6", cash: 684, stDebtTotal: 0 + 2, intCov: 5.92, fcf: -286, quickRatio: 403.8, otherRec: 0 },
+            { code: "6854", name: "錼創科技-KY創", tcri: "7", cash: 2267, stDebtTotal: 100 + 1277, intCov: -25.19, fcf: 166, quickRatio: 198.61, otherRec: 410 },
+            { code: "6862", name: "三集瑞-KY", tcri: "6", cash: 1316, stDebtTotal: 323 + 4, intCov: 6.88, fcf: 262, quickRatio: 174.81, otherRec: 2 },
+            { code: "6863", name: "永道-KY", tcri: "5", cash: 2509, stDebtTotal: 1669 + 0, intCov: 10.49, fcf: -88, quickRatio: 137.28, otherRec: 0 },
+            { code: "6869", name: "雲豹能源", tcri: "6", cash: 2017, stDebtTotal: 3240 + 488, intCov: -1.31, fcf: -415, quickRatio: 65.45, otherRec: 324 },
+            { code: "6870", name: "騰雲", tcri: "6", cash: 643, stDebtTotal: 617 + 5, intCov: 10.82, fcf: 248, quickRatio: 88.6, otherRec: 0 },
+            { code: "6873", name: "泓德能源", tcri: "6", cash: 1639, stDebtTotal: 3628 + 2776, intCov: -0.33, fcf: 946, quickRatio: 46.94, otherRec: 23 },
+            { code: "6874", name: "倍力", tcri: "6", cash: 233, stDebtTotal: 120 + 288, intCov: 9.66, fcf: 186, quickRatio: 93.98, otherRec: 0 },
+            { code: "6890", name: "來億-KY", tcri: "5", cash: 6351, stDebtTotal: 0 + 0, intCov: 43.07, fcf: 2456, quickRatio: 225.85, otherRec: 7 },
+            { code: "6894", name: "衛司特", tcri: "6", cash: 714, stDebtTotal: 34 + 8, intCov: 50.14, fcf: -89, quickRatio: 233.91, otherRec: 7 },
+            { code: "6903", name: "巨漢", tcri: "5", cash: 2294, stDebtTotal: 0 + 0, intCov: 0, fcf: 715, quickRatio: 133.41, otherRec: 1 },
+            { code: "6904", name: "伯鑫", tcri: "6", cash: 378, stDebtTotal: 190 + 22, intCov: 17.34, fcf: 105, quickRatio: 120.64, otherRec: 9 },
+            { code: "6913", name: "鴻呈", tcri: "6", cash: 372, stDebtTotal: 154 + 0, intCov: 19.43, fcf: -72, quickRatio: 187.69, otherRec: 10 },
+            { code: "6957", name: "裕慶-KY", tcri: "5", cash: 1274, stDebtTotal: 40 + 3, intCov: 10.59, fcf: 490, quickRatio: 161.11, otherRec: 10 },
+            { code: "6982", name: "大井泵浦", tcri: "7", cash: 211, stDebtTotal: 210 + 0, intCov: 2.73, fcf: 67, quickRatio: 80.47, otherRec: 1 },
+            { code: "7402", name: "邑錡", tcri: "6", cash: 500, stDebtTotal: 0 + 0, intCov: 3.07, fcf: 15, quickRatio: 323.59, otherRec: 3 },
+            { code: "7556", name: "意德士", tcri: "6", cash: 714, stDebtTotal: 0 + 0, intCov: 66.38, fcf: 40, quickRatio: 245.78, otherRec: 24 },
+            { code: "7610", name: "聯友金屬-創", tcri: "6", cash: 803, stDebtTotal: 347 + 84, intCov: 91.72, fcf: -1254, quickRatio: 104.64, otherRec: 94 },
+            { code: "7631", name: "聚賢研發-創", tcri: "6", cash: 450, stDebtTotal: 249 + 21, intCov: 107.23, fcf: -70, quickRatio: 99.92, otherRec: 0 },
+            { code: "7713", name: "威力德生醫", tcri: "5", cash: 90, stDebtTotal: 0 + 0, intCov: 21.2, fcf: 67, quickRatio: 107.91, otherRec: 1 },
+            { code: "8021", name: "尖點", tcri: "4", cash: 2504, stDebtTotal: 251 + 50, intCov: 64.66, fcf: -552, quickRatio: 183.58, otherRec: 45 },
+            { code: "8027", name: "鈦昇", tcri: "6", cash: 527, stDebtTotal: 14 + 68, intCov: -6.26, fcf: -5, quickRatio: 164.48, otherRec: 39 },
+            { code: "8028", name: "昇陽半導體", tcri: "6", cash: 967, stDebtTotal: 0 + 681, intCov: 20.27, fcf: -598, quickRatio: 65.04, otherRec: 6 },
+            { code: "8042", name: "金山電", tcri: "7", cash: 1570, stDebtTotal: 1215 + 49, intCov: 7.91, fcf: -89, quickRatio: 105.84, otherRec: 48 },
+            { code: "8050", name: "廣積", tcri: "5", cash: 1071, stDebtTotal: 580 + 502, intCov: 15.13, fcf: -1696, quickRatio: 117.74, otherRec: 257 },
+            { code: "8054", name: "安國", tcri: "7", cash: 1578, stDebtTotal: 390 + 293, intCov: -12.25, fcf: 336, quickRatio: 59.15, otherRec: 0 },
+            { code: "8074", name: "鉅橡", tcri: "6", cash: 1112, stDebtTotal: 406 + 43, intCov: 10.25, fcf: -841, quickRatio: 215.51, otherRec: 8 },
+            { code: "8087", name: "麗升能源", tcri: "7", cash: 511, stDebtTotal: 389 + 510, intCov: -0.58, fcf: 582, quickRatio: 78.74, otherRec: 17 },
+            { code: "8091", name: "翔名", tcri: "5", cash: 1667, stDebtTotal: 183 + 314, intCov: 52.18, fcf: -303, quickRatio: 166.47, otherRec: 7 },
+            { code: "8092", name: "建暐", tcri: "9", cash: 70, stDebtTotal: 59 + 92, intCov: 0.98, fcf: -19, quickRatio: 61.82, otherRec: 0 },
+            { code: "8096", name: "擎亞", tcri: "6", cash: 1724, stDebtTotal: 15041 + 0, intCov: 2.27, fcf: -697, quickRatio: 33.61, otherRec: 159 },
+            { code: "8104", name: "錸寶", tcri: "7", cash: 550, stDebtTotal: 897 + 326, intCov: 1.87, fcf: 70, quickRatio: 61.57, otherRec: 55 },
+            { code: "8111", name: "立碁", tcri: "6", cash: 530, stDebtTotal: 37 + 3, intCov: 11.36, fcf: -488, quickRatio: 299.19, otherRec: 8 },
+            { code: "8112", name: "至上", tcri: "6", cash: 3899, stDebtTotal: 86568 + 2817, intCov: 5.15, fcf: 1151, quickRatio: 48.18, otherRec: 3226 },
+            { code: "8147", name: "正淩", tcri: "6", cash: 536, stDebtTotal: 164 + 0, intCov: 17.03, fcf: 106, quickRatio: 114.38, otherRec: 15 },
+            { code: "8155", name: "博智", tcri: "4", cash: 1591, stDebtTotal: 47 + 0, intCov: 75.21, fcf: 408, quickRatio: 144.81, otherRec: 35 },
+            { code: "8171", name: "天宇", tcri: "8", cash: 356, stDebtTotal: 322 + 42, intCov: -9.24, fcf: 341, quickRatio: 107.09, otherRec: 19 },
+            { code: "8210", name: "勤誠", tcri: "4", cash: 8812, stDebtTotal: 1681 + 366, intCov: 70.12, fcf: 1933, quickRatio: 123.01, otherRec: 104 },
+            { code: "8271", name: "宇瞻", tcri: "5", cash: 2434, stDebtTotal: 2400 + 1, intCov: 90.69, fcf: -1498, quickRatio: 66.76, otherRec: 11 },
+            { code: "8299", name: "群聯", tcri: "3", cash: 31547, stDebtTotal: 3815 + 0, intCov: 102.26, fcf: -18285, quickRatio: 113.5, otherRec: 1279 },
+            { code: "8374", name: "羅昇", tcri: "6", cash: 1418, stDebtTotal: 660 + 0, intCov: 17.19, fcf: 126, quickRatio: 122.71, otherRec: 120 },
+            { code: "8404", name: "百和興業-KY", tcri: "7", cash: 3126, stDebtTotal: 7570 + 259, intCov: 1.84, fcf: 96, quickRatio: 52.31, otherRec: 38 },
+            { code: "8411", name: "福貞-KY", tcri: "6", cash: 1476, stDebtTotal: 1130 + 230, intCov: 3.9, fcf: 57, quickRatio: 81.59, otherRec: 0 },
+            { code: "8422", name: "可寧衛*", tcri: "4", cash: 4116, stDebtTotal: 1993 + 282, intCov: 12.51, fcf: 2221, quickRatio: 76.88, otherRec: 90 },
+            { code: "8431", name: "匯鑽科", tcri: "7", cash: 567, stDebtTotal: 138 + 70, intCov: -6.81, fcf: 69, quickRatio: 163.35, otherRec: 124 },
+            { code: "8433", name: "弘帆", tcri: "6", cash: 943, stDebtTotal: 913 + 68, intCov: 11.83, fcf: 27, quickRatio: 102.62, otherRec: 23 },
+            { code: "8438", name: "昶昕", tcri: "6", cash: 642, stDebtTotal: 316 + 5, intCov: 32.13, fcf: 115, quickRatio: 107.59, otherRec: 31 },
+            { code: "8442", name: "威宏-KY", tcri: "6", cash: 869, stDebtTotal: 847 + 449, intCov: 1.55, fcf: 169, quickRatio: 103.85, otherRec: 65 },
+            { code: "8462", name: "柏文", tcri: "5", cash: 1950, stDebtTotal: 0 + 246, intCov: 10.79, fcf: 379, quickRatio: 54.96, otherRec: 0 },
+            { code: "8467", name: "波力-KY", tcri: "6", cash: 1777, stDebtTotal: 495 + 1088, intCov: 10.5, fcf: 461, quickRatio: 112.16, otherRec: 183 },
+            { code: "8473", name: "山林水", tcri: "6", cash: 3441, stDebtTotal: 1440 + 646, intCov: 6.82, fcf: 297, quickRatio: 97.74, otherRec: 0 },
+            { code: "8476", name: "台境*", tcri: "7", cash: 305, stDebtTotal: 660 + 152, intCov: 4.68, fcf: -247, quickRatio: 33.05, otherRec: 0 },
+            { code: "8478", name: "東哥遊艇", tcri: "5", cash: 1911, stDebtTotal: 1566 + 529, intCov: 9.39, fcf: 858, quickRatio: 157.05, otherRec: 8 },
+            { code: "8488", name: "吉源-KY", tcri: "7", cash: 624, stDebtTotal: 58 + 652, intCov: 3.53, fcf: -10, quickRatio: 79.13, otherRec: 20 },
+            { code: "8489", name: "三貝德", tcri: "6", cash: 1160, stDebtTotal: 150 + 261, intCov: 6.44, fcf: 169, quickRatio: 109.9, otherRec: 5 },
+            { code: "8927", name: "北基", tcri: "7", cash: 2122, stDebtTotal: 2296 + 3961, intCov: 5, fcf: -2913, quickRatio: 27.27, otherRec: 204 },
+            { code: "8936", name: "國統", tcri: "6", cash: 944, stDebtTotal: 1140 + 286, intCov: 33.11, fcf: 845, quickRatio: 77.79, otherRec: 8 },
+            { code: "8996", name: "高力", tcri: "5", cash: 2536, stDebtTotal: 1580 + 92, intCov: 32.29, fcf: -363, quickRatio: 96.54, otherRec: 0 },
+            { code: "9802", name: "鈺齊-KY", tcri: "4", cash: 1151, stDebtTotal: 1387 + 1019, intCov: 15.3, fcf: -5, quickRatio: 79.5, otherRec: 454 },
+            { code: "9906", name: "欣巴巴", tcri: "8", cash: 419, stDebtTotal: 1427 + 4317, intCov: 5.42, fcf: 609, quickRatio: 7.32, otherRec: 0 },
+            { code: "9933", name: "中鼎", tcri: "5", cash: 40861, stDebtTotal: 636 + 764, intCov: 15.28, fcf: -3234, quickRatio: 77.85, otherRec: 333 },
+            { code: "9935", name: "慶豐富", tcri: "6", cash: 651, stDebtTotal: 738 + 1045, intCov: 5.28, fcf: -560, quickRatio: 76.31, otherRec: 40 },
+            { code: "9939", name: "宏全", tcri: "4", cash: 3844, stDebtTotal: 2301 + 3033, intCov: 16.03, fcf: 61, quickRatio: 75.42, otherRec: 0 },
+            { code: "9941", name: "裕融", tcri: "N/A", cash: 7065, stDebtTotal: 41271 + 11995, intCov: 25.85, fcf: 5585, quickRatio: 96.31, otherRec: 13077 },
+            { code: "9958", name: "世紀鋼", tcri: "5", cash: 13167, stDebtTotal: 3498 + 7711, intCov: 7.46, fcf: -7655, quickRatio: 78.14, otherRec: 70 }
+        ];
+
+        let companyData = [];
+        let currentFilter = 'all';
+        let currentSort = 'score-desc'; // 預設按暴雷指數降冪
+        let selectedCompanyCode = null; // 用於追蹤目前選擇的公司
+
+        const fmtNum = (num) => new Intl.NumberFormat('en-US').format(Math.round(num));
+
+        let searchQuery = ''; // 新增：搜尋關鍵字變數
+
+        // 處理即時搜尋輸入
+        let searchTimer = null;
+
+        function handleSearch(val) {
+            const clearBtn = document.getElementById('clear-search-btn');
+            if (val.trim().length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+
+            // 防抖：清除前一次計時器，避免頻繁觸發
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => {
+                searchQuery = val.trim().toLowerCase();
+                renderDashboard();
+            }, 150);
+
+        }
+
+        function initDashboardStats() {
+            const listAll = document.getElementById('list-all');
+            const listRisk = document.getElementById('list-risk');
+            const listAnomaly = document.getElementById('list-anomaly');
+            const listFcf = document.getElementById('list-fcf');
+
+            let highRiskCount = 0, anomalyCount = 0, fcfNegCount = 0;
+
+            companyData.forEach(c => {
+                listAll.innerHTML += `<li>${c.code} ${c.name}</li>`;
+                if (c.score >= 60) {
+                    highRiskCount++;
+                    listRisk.innerHTML += `<li>${c.code} ${c.name} <span class="text-red-400 text-xs ml-1">(${c.score}分)</span></li>`;
+                }
+                if (c.cash > 0 && (c.otherRec / c.cash) > 0.2) {
+                    anomalyCount++;
+                    listAnomaly.innerHTML += `<li>${c.code} ${c.name} <span class="text-yellow-400 text-xs ml-1">(${((c.otherRec / c.cash) * 100).toFixed(0)}%)</span></li>`;
+                }
+                if (c.fcf < 0) {
+                    fcfNegCount++;
+                    listFcf.innerHTML += `<li>${c.code} ${c.name} <span class="text-blue-400 text-xs ml-1">(${fmtNum(c.fcf)})</span></li>`;
+                }
+            });
+
+            document.getElementById('high-risk-count').innerHTML = `${highRiskCount} <span class="text-sm font-normal text-gray-500">家</span>`;
+            document.getElementById('anomaly-count').innerHTML = `${anomalyCount} <span class="text-sm font-normal text-gray-500">家</span>`;
+            document.getElementById('fcf-neg-count').innerHTML = `${fcfNegCount} <span class="text-sm font-normal text-gray-500">家</span>`;
+        }
+
+        // 清除搜尋內容
+        function clearSearch() {
+            const input = document.getElementById('search-input');
+            input.value = '';
+            searchQuery = '';
+            document.getElementById('clear-search-btn').classList.add('hidden');
+            renderDashboard();
+        }
+
+        function getTcriBadge(tcri) {
+            let val = parseInt(tcri);
+            if (isNaN(val)) return `<span class="tcri-badge tcri-unknown">TCRI N/A</span>`;
+            if (val <= 4) return `<span class="tcri-badge tcri-safe">TCRI ${val}</span>`;
+            if (val <= 6) return `<span class="tcri-badge tcri-warn">TCRI ${val}</span>`;
+            return `<span class="tcri-badge tcri-danger">TCRI ${val}</span>`;
+        }
+
+        // 100 分制暴雷演算法
+        function calculateCrashIndex(c) {
+            let score = 0;
+            // 1. 資金缺口 (30分)
+            if (c.cash > 0) {
+                if (c.stDebtTotal > c.cash * 1.5) score += 30;
+                else if (c.stDebtTotal > c.cash) score += 15;
+            } else if (c.stDebtTotal > 0) {
+                score += 30;
+            }
+            // 2. 利息支付 (20分)
+            if (c.intCov < 1) score += 20;
+            else if (c.intCov < 2) score += 10;
+            // 3. 掏空疑慮 (15分)
+            if (c.cash > 0) {
+                let recRatio = c.otherRec / c.cash;
+                if (recRatio > 0.5) score += 15;
+                else if (recRatio > 0.2) score += 8;
+            }
+            // 4. 營運失血 (15分): 只要自由現金流為負即給 15 分
+            if (c.fcf < 0) score += 15;
+
+            // 5. 速動衰竭 (10分)
+            if (c.quickRatio < 50) score += 10;
+            else if (c.quickRatio < 100) score += 5;
+            // 6. TCRI (10分)
+            let tcriVal = parseInt(c.tcri);
+            if (!isNaN(tcriVal) && tcriVal >= 7) score += 10;
+
+            return Math.min(score, 100);
+        }
+
+        function initData() {
+            companyData = rawCompanyData.map(c => {
+                c.score = calculateCrashIndex(c);
+                // 預先建好小寫搜尋索引
+                c.searchIndex = `${c.code} ${c.name}`.toLowerCase();
+                return c;
+            });
+            // 排序並預設選中最高風險公司
+            companyData.sort((a, b) => b.score - a.score);
+            if (companyData.length > 0) {
+                selectedCompanyCode = companyData[0].code;
+            }
+
+            document.getElementById('all-count').innerHTML = `${companyData.length} <span class="text-sm font-normal text-gray-500">家</span>`;
+            document.getElementById('target-count-nav').innerText = `標的數：${companyData.length} 家`;
+        }
+
+        // 點擊列觸發的事件：不重繪整個表格，僅切換 Class 與更新診斷面板
+        window.selectCompany = function (code) {
+            if (selectedCompanyCode === code) return;
+            selectedCompanyCode = code;
+
+            // 1. 移除先前選取列的樣式，並還原原本的預設樣式
+            const previousRow = document.querySelector('#company-table tr.row-selected');
+            if (previousRow) {
+                previousRow.classList.remove('row-selected');
+                const prevCode = previousRow.getAttribute('data-code');
+                const prevTarget = companyData.find(x => x.code === prevCode);
+                if (prevTarget && prevTarget.score >= 60) {
+                    previousRow.classList.add('bg-red-900/10');
+                }
+                previousRow.classList.add('row-default');
+            }
+
+            // 2. 為當前選取列加上高亮樣式
+            const targetRow = document.querySelector(`#company-table tr[data-code="${code}"]`);
+            if (targetRow) {
+                targetRow.classList.remove('row-default', 'bg-red-900/10');
+                targetRow.classList.add('row-selected');
+            }
+
+            // 3. 僅更新單一公司診斷面板
+            renderSingleCompanyPanel();
+        };
+
+        // 切換代號排序邏輯
+        window.toggleCodeSort = function () {
+            if (currentSort === 'code-asc') {
+                currentSort = 'code-desc';
+                document.getElementById('sort-icon-code').className = "fa-solid fa-sort-down text-blue-400 ml-1";
+            } else {
+                currentSort = 'code-asc';
+                document.getElementById('sort-icon-code').className = "fa-solid fa-sort-up text-blue-400 ml-1";
+            }
+            renderDashboard();
+        }
+
+        // 2. 切換暴雷指數排序 (升冪/降冪)
+        window.toggleScoreSort = function () {
+            if (currentSort === 'score-desc') {
+                currentSort = 'score-asc';
+            } else {
+                currentSort = 'score-desc';
+            }
+            renderDashboard();
+        };
+
+        // 渲染單一公司健康診斷面板
+        function renderSingleCompanyPanel() {
+            const panel = document.getElementById('single-company-panel');
+            let c = companyData.find(x => x.code === selectedCompanyCode);
+
+            // 如果篩選條件下查無標的，顯示提示訊息
+            if (!c) {
+                panel.innerHTML = `
+            <div class="text-center py-12 text-gray-500">
+                <i class="fa-solid fa-circle-exclamation text-2xl mb-2 block"></i>
+                目前篩選條件下無選定標的
+            </div>
+        `;
+                return;
+            }
+
+            const isCashShort = c.stDebtTotal > c.cash;
+            const isIntDanger = c.intCov < 1;
+            const isFcfNeg = c.fcf < 0;
+            const recRatio = c.cash > 0 ? ((c.otherRec / c.cash) * 100).toFixed(1) : 0;
+            const isAnomaly = c.cash > 0 && recRatio > 20;
+
+            let barCashPercent = 0, barDebtPercent = 0;
+            let totalBar = c.cash + c.stDebtTotal;
+            if (totalBar > 0) {
+                barCashPercent = (c.cash / totalBar * 100).toFixed(1);
+                barDebtPercent = (c.stDebtTotal / totalBar * 100).toFixed(1);
+            }
+
+            panel.innerHTML = `
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-baseline">
+                <span class="text-2xl font-bold text-white mr-2">[${c.code}] ${c.name}</span>
+                ${getTcriBadge(c.tcri)}
+            </div>
+            <div class="text-right">
+                <span class="text-xs text-gray-400 block">暴雷指數</span>
+                <span class="text-2xl font-bold ${c.score >= 60 ? 'text-red-500' : (c.score >= 40 ? 'text-yellow-500' : 'text-green-500')}">${c.score}</span>
+            </div>
+        </div>
+
+        <!-- 流動性對決 -->
+        <div class="bg-gray-800 p-4 rounded-lg border border-gray-600 mb-4 relative">
+            <p class="text-xs text-gray-400 mb-2">短期資金水位與債務對決 (百萬)</p>
+            <div class="flex justify-between text-sm mb-1">
+                <span class="text-green-400 font-bold"><i class="fa-solid fa-money-bill-wave mr-1"></i>現金: ${fmtNum(c.cash)}</span>
+                <span class="${isCashShort ? 'text-red-500' : 'text-gray-300'} font-bold">短債: ${fmtNum(c.stDebtTotal)} <i class="fa-solid fa-hand-holding-dollar ml-1"></i></span>
+            </div>
+            <div class="w-full bg-red-900/30 h-4 rounded-full overflow-hidden flex relative border border-gray-700">
+                <div class="bg-green-500 h-full transition-all duration-500" style="width: ${barCashPercent}%"></div>
+                <div class="bg-red-500 h-full transition-all duration-500" style="width: ${barDebtPercent}%"></div>
+            </div>
+            ${isCashShort ? `<div class="text-xs text-red-400 mt-2 text-right animate-pulse"><i class="fa-solid fa-triangle-exclamation"></i> 資金缺口高達 ${fmtNum(c.stDebtTotal - c.cash)} 百萬</div>` : ''}
+        </div>
+
+        <!-- 四大指標 Grid -->
+        <div class="grid grid-cols-2 gap-3">
+            <div class="bg-gray-800 p-3 rounded border ${isIntDanger ? 'border-orange-500/50' : 'border-gray-700'}">
+                <p class="text-[10px] text-gray-400">利息保障倍數</p>
+                <p class="text-lg font-mono font-bold ${isIntDanger ? 'text-orange-400' : 'text-gray-200'}">${c.intCov} x</p>
+                <p class="text-[10px] ${isIntDanger ? 'text-orange-500' : 'text-green-500'} mt-1">${isIntDanger ? '獲利無法支付利息' : '利息支付能力正常'}</p>
+            </div>
+            <div class="bg-gray-800 p-3 rounded border ${isFcfNeg ? 'border-blue-500/50' : 'border-gray-700'}">
+                <p class="text-[10px] text-gray-400">自由現金流</p>
+                <p class="text-lg font-mono font-bold ${isFcfNeg ? 'text-blue-400' : 'text-green-400'}">${c.fcf < 0 ? '' : '+'}${fmtNum(c.fcf)} M</p>
+                <p class="text-[10px] ${isFcfNeg ? 'text-blue-400' : 'text-green-500'} mt-1">${isFcfNeg ? '營運持續失血中' : '營運創造正向現金'}</p>
+            </div>
+            <div class="bg-gray-800 p-3 rounded border ${c.quickRatio < 100 ? 'border-teal-500/50' : 'border-gray-700'}">
+                <p class="text-[10px] text-gray-400">速動比率</p>
+                <p class="text-lg font-mono font-bold ${c.quickRatio < 100 ? 'text-teal-400' : 'text-gray-200'}">${c.quickRatio}%</p>
+                <p class="text-[10px] ${c.quickRatio < 100 ? 'text-teal-400' : 'text-green-500'} mt-1">${c.quickRatio < 100 ? '短期變現力偏低' : '短期變現力佳'}</p>
+            </div>
+            <div class="bg-gray-800 p-3 rounded border ${isAnomaly ? 'border-yellow-500/50' : 'border-gray-700'}">
+                <p class="text-[10px] text-gray-400">其他應收佔現金比</p>
+                <p class="text-lg font-mono font-bold ${isAnomaly ? 'text-yellow-400' : 'text-gray-200'}">${recRatio}%</p>
+                <p class="text-[10px] ${isAnomaly ? 'text-yellow-500' : 'text-green-500'} mt-1">${isAnomaly ? '資金流向異常疑慮' : '未見明顯異常流向'}</p>
+            </div>
+        </div>
+    `;
+        }
+
+        function renderDashboard() {
+            const tableBody = document.getElementById('company-table');
+            const listAll = document.getElementById('list-all');
+            const listRisk = document.getElementById('list-risk');
+            const listAnomaly = document.getElementById('list-anomaly');
+            const listFcf = document.getElementById('list-fcf');
+            const iconCode = document.getElementById('sort-icon-code');
+            const iconScore = document.getElementById('sort-icon-score');
+
+            tableBody.innerHTML = '';
+            listAll.innerHTML = ''; listRisk.innerHTML = ''; listAnomaly.innerHTML = ''; listFcf.innerHTML = '';
+
+            let highRiskCount = 0, anomalyCount = 0, fcfNegCount = 0;
+
+            // 1. 篩選資料（結合按鈕過濾 + 搜尋輸入框關鍵字）
+            let filteredData = companyData.filter(c => {
+                let matchFilter = true;
+                if (currentFilter === 'cash-short' && !(c.stDebtTotal > c.cash)) matchFilter = false;
+                if (currentFilter === 'int-danger' && !(c.intCov < 1)) matchFilter = false;
+                if (currentFilter === 'high-risk' && !(c.score >= 60)) matchFilter = false;
+                if (currentFilter === 'fcf-neg' && !(c.fcf < 0)) matchFilter = false;
+                if (currentFilter === 'tcri-bad' && !(parseInt(c.tcri) >= 7)) matchFilter = false;
+
+                let matchSearch = true;
+                if (searchQuery) {
+                    matchSearch = c.searchIndex ? c.searchIndex.includes(searchQuery) : (c.code.toLowerCase().includes(searchQuery) || c.name.toLowerCase().includes(searchQuery));
+                }
+
+                return matchFilter && matchSearch;
+            });
+
+            // 2. 排序邏輯
+            if (currentSort === 'code-asc') {
+                filteredData.sort((a, b) => a.code.localeCompare(b.code));
+                if (iconCode) iconCode.className = "fa-solid fa-sort-up text-blue-400 ml-1";
+                if (iconScore) iconScore.className = "fa-solid fa-sort text-gray-500 ml-1";
+            } else if (currentSort === 'code-desc') {
+                filteredData.sort((a, b) => b.code.localeCompare(a.code));
+                if (iconCode) iconCode.className = "fa-solid fa-sort-down text-blue-400 ml-1";
+                if (iconScore) iconScore.className = "fa-solid fa-sort text-gray-500 ml-1";
+            } else if (currentSort === 'score-asc') {
+                filteredData.sort((a, b) => a.score - b.score);
+                if (iconCode) iconCode.className = "fa-solid fa-sort text-gray-500 ml-1";
+                if (iconScore) iconScore.className = "fa-solid fa-sort-up text-blue-400 ml-1";
+            } else {
+                filteredData.sort((a, b) => b.score - a.score);
+                if (iconCode) iconCode.className = "fa-solid fa-sort text-gray-500 ml-1";
+                if (iconScore) iconScore.className = "fa-solid fa-sort-down text-blue-400 ml-1";
+            }
+
+            // 🚀【核心修改】：若篩選結果有資料，自動將選取目標切換為排序/篩選後的第一筆公司
+            if (filteredData.length > 0) {
+                selectedCompanyCode = filteredData[0].code;
+            } else {
+                selectedCompanyCode = null;
+            }
+
+            // 3. 渲染表格
+            if (filteredData.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-gray-500"><i class="fa-solid fa-circle-exclamation mr-2"></i>查無符合標的</td></tr>`;
+            } else {
+                const rowsHtml = filteredData.map(c => {
+                    const scoreBarColor = c.score > 60 ? 'bg-red-500' : (c.score > 40 ? 'bg-yellow-500' : 'bg-green-500');
+                    const isCashShort = c.stDebtTotal > c.cash;
+                    const isIntDanger = c.intCov < 1;
+                    const isAnomaly = c.cash > 0 && (c.otherRec / c.cash) > 0.2;
+                    const isSelected = c.code === selectedCompanyCode;
+
+                    const rowBgClass = isSelected ? 'row-selected' : (c.score >= 60 ? 'bg-red-900/10 row-default' : 'row-default');
+
+                    return `
+                <tr data-code="${c.code}" class="hover:bg-gray-800 transition-colors ${rowBgClass}" onclick="selectCompany('${c.code}')">
+                    <td class="px-5 py-4 border-b border-gray-700">
+                        <div class="flex items-center">
+                            <span class="font-bold text-base mr-2 text-blue-200">${c.code}</span>
+                            <span class="font-bold text-gray-100">${c.name}</span>
+                        </div>
+                        <div class="mt-1">${getTcriBadge(c.tcri)}</div>
+                    </td>
+                    <td class="px-5 py-4 border-b border-gray-700 text-right font-mono text-gray-200">
+                        ${fmtNum(c.cash)}
+                    </td>
+                    <td class="px-5 py-4 border-b border-gray-700 text-right">
+                        <div class="font-mono ${isCashShort ? 'text-red-400 font-bold' : 'text-gray-300'}">
+                            ${fmtNum(c.stDebtTotal)}
+                        </div>
+                        ${isCashShort ? `<div class="text-[10px] text-red-500 mt-1"><i class="fa-solid fa-triangle-exclamation"></i> 缺口 ${fmtNum(c.stDebtTotal - c.cash)}</div>` : ''}
+                    </td>
+                    <td class="px-5 py-4 border-b border-gray-700 text-right">
+                        <div class="font-mono ${isIntDanger ? 'text-yellow-400 font-bold' : 'text-gray-300'}">
+                            ${c.intCov} x
+                        </div>
+                    </td>
+                    <td class="px-5 py-4 border-b border-gray-700 text-right">
+                        <div class="font-mono ${c.fcf < 0 ? 'text-red-400' : 'text-green-400'}">
+                            ${c.fcf < 0 ? '' : '+'}${fmtNum(c.fcf)}
+                        </div>
+                    </td>
+                    <td class="px-5 py-4 border-b border-gray-700 text-right">
+                        <div class="text-sm ${c.quickRatio < 100 ? 'text-red-400' : 'text-gray-300'}">
+                            速動: ${c.quickRatio}%
+                        </div>
+                        <div class="text-xs mt-1 ${isAnomaly ? 'text-yellow-500 font-bold' : 'text-gray-500'}">
+                            應收佔現: ${c.cash > 0 ? ((c.otherRec / c.cash) * 100).toFixed(1) : 0}%
+                        </div>
+                    </td>
+                    <td class="px-5 py-4 border-b border-gray-700 text-center">
+                        <div class="text-lg font-bold mb-1 ${c.score >= 60 ? 'text-red-500' : 'text-gray-200'}">${c.score}</div>
+                        <div class="w-24 bg-gray-700 h-1.5 rounded-full mx-auto overflow-hidden">
+                            <div class="${scoreBarColor} h-full" style="width: ${c.score}%"></div>
+                        </div>
+                    </td>
+                </tr>
+            `;
+                }).join('');
+
+                tableBody.innerHTML = rowsHtml;
+            }
+
+            // 4. 同步更新診斷面板（自動帶入 selectedCompanyCode）
+            renderSingleCompanyPanel();
+        }
+
+        // 綁定篩選器按鈕事件
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.filter-btn').forEach(b => {
+                    b.classList.remove('active', 'bg-blue-600', 'text-white', 'border-blue-500');
+                    b.classList.add('bg-gray-700', 'text-gray-300');
+                });
+                const target = e.target;
+                target.classList.remove('bg-gray-700', 'text-gray-300');
+                target.classList.add('active', 'bg-blue-600', 'text-white', 'border-blue-500');
+
+                currentFilter = target.getAttribute('data-filter');
+                currentSort = 'score-desc'; // 切換過濾條件時重置為暴雷指數降冪排序
+                renderDashboard();
+            });
+        });
+
+        // 啟動
+        window.onload = () => {
+            initData();
+            initDashboardStats();
+            renderDashboard();
+        };
+    </script>
+</body>
+
+</html>
