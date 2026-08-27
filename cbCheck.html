@@ -667,14 +667,16 @@
             let highRiskCount = 0, anomalyCount = 0, fcfNegCount = 0;
 
             companyData.forEach(c => {
+                // 寫入「全體監控標的」Hover 下拉清單
                 listAll.innerHTML += `<li>${c.code} ${c.name}</li>`;
+        
                 if (c.score >= 60) {
                     highRiskCount++;
                     listRisk.innerHTML += `<li>${c.code} ${c.name} <span class="text-red-400 text-xs ml-1">(${c.score}分)</span></li>`;
                 }
                 if (c.cash > 0 && (c.otherRec / c.cash) > 0.2) {
                     anomalyCount++;
-                    listAnomaly.innerHTML += `<li>${c.code} ${c.name} <span class="text-yellow-400 text-xs ml-1">(${((c.otherRec / c.cash) * 100).toFixed(0)}%)</span></li>`;
+                    listAnomaly.innerHTML += `<li>${c.code} ${c.name} <span class="text-yellow-400 text-xs ml-1">(${((c.otherRec/c.cash)*100).toFixed(0)}%)</span></li>`;
                 }
                 if (c.fcf < 0) {
                     fcfNegCount++;
@@ -682,6 +684,8 @@
                 }
             });
 
+            // 更新頂部卡片數字
+            document.getElementById('all-count').innerHTML = `${companyData.length} <span class="text-sm font-normal text-gray-500">家</span>`;
             document.getElementById('high-risk-count').innerHTML = `${highRiskCount} <span class="text-sm font-normal text-gray-500">家</span>`;
             document.getElementById('anomaly-count').innerHTML = `${anomalyCount} <span class="text-sm font-normal text-gray-500">家</span>`;
             document.getElementById('fcf-neg-count').innerHTML = `${fcfNegCount} <span class="text-sm font-normal text-gray-500">家</span>`;
@@ -894,7 +898,7 @@
             const iconScore = document.getElementById('sort-icon-score');
 
             tableBody.innerHTML = '';
-            listAll.innerHTML = ''; listRisk.innerHTML = ''; listAnomaly.innerHTML = ''; listFcf.innerHTML = '';
+            //listAll.innerHTML = ''; listRisk.innerHTML = ''; listAnomaly.innerHTML = ''; listFcf.innerHTML = '';
 
             let highRiskCount = 0, anomalyCount = 0, fcfNegCount = 0;
 
